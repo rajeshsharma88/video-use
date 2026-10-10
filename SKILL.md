@@ -57,7 +57,8 @@ The skill lives in `video-use/`. User footage lives wherever they put it. All se
 
 ## Setup
 
-- `ELEVENLABS_API_KEY` in `.env` at project root or env. Ask and write `.env` if missing.
+- A transcription backend. Local `whisper-cli` + a model is free and needs no key: resolve the model from `WHISPER_MODEL`, defaulting to `~/whisper-models/ggml-large-v3-turbo.bin`, and pass `-ml 1 --split-on-word` so output stays word-level. Otherwise `ELEVENLABS_API_KEY` in `.env` at project root or env — needed only for speaker diarization or audio events, which local whisper does not produce. Ask and write `.env` if missing.
+- If transcription came from local whisper, convert before packing: `python helpers/whisper_to_scribe.py <transcript.json>`. whisper emits `{"transcription": […]}` with millisecond offsets while `pack_transcripts.py` reads Scribe's `{"words": […]}` in seconds; skipping the converter yields `_no speech detected_` with no error.
 - `ffmpeg` + `ffprobe` on PATH.
 - Python deps: `pip install -e .`.
 - `yt-dlp`, `manim`, Remotion installed only on first use.
@@ -68,6 +69,7 @@ The skill lives in `video-use/`. User footage lives wherever they put it. All se
 - **`transcribe.py <video>`** — single-file Scribe call. `--num-speakers N` optional. Cached.
 - **`transcribe_batch.py <videos_dir>`** — 4-worker parallel transcription. Use for multi-take.
 - **`pack_transcripts.py --edit-dir <dir>`** — `transcripts/*.json` → `takes_packed.md` (phrase-level, break on silence ≥ 0.5s).
+- **`whisper_to_scribe.py <transcript.json>`** — converts `whisper-cli -oj` output into the Scribe-shaped `words` list `pack_transcripts.py` reads. Required whenever transcription came from local whisper; skipping it produces an empty `takes_packed.md` with no error.
 - **`timeline_view.py <video> <start> <end>`** — filmstrip + waveform PNG. On-demand visual drill-down. **Not a scan tool** — use it at decision points, not constantly.
 - **`render.py <edl.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--preview` for 720p fast. `--build-subtitles` to generate master.srt inline.
 - **`grade.py <in> -o <out>`** — ffmpeg filter chain grade. Presets + `--filter '<raw>'` for custom.
@@ -296,8 +298,10 @@ Things that consistently fail regardless of style:
 
 - **Hierarchical pre-computed codec formats** with USABILITY / tone tags / shot layers. Over-engineering. Derive from the transcript at decision time.
 - **Hand-tuned moment-scoring functions.** The LLM picks better than any heuristic you'll write.
-- **Whisper SRT / phrase-level output.** Loses sub-second gap data. Always word-level verbatim.
-- **Running Whisper locally on CPU.** Slow and it normalizes fillers. Use hosted Scribe.
+- **Whisper SRT / phrase-level output.** Loses sub-second gap data. Always word-level verbatim. With `whisper-cli` that means `-ml 1 --split-on-word`; without it you silently get phrase-level segments and break Hard Rule 8.
+- **Assuming local whisper gives you diarization.** `whisper-cli` produces no speaker labels and no audio events. If the cut depends on either, say so and ask before switching to hosted Scribe — don't invent speaker IDs.
+- **Hardcoding a transcription model path.** Resolve `WHISPER_MODEL` from the environment or `.env` so the skill is portable across machines.
+- **Packing whisper JSON directly.** `whisper-cli -oj` emits `{"transcription": […]}` with ms `offsets`; `pack_transcripts.py` reads Scribe's `{"words": […]}` in seconds. Skipping `whisper_to_scribe.py` silently yields `_no speech detected_`.
 - **Burning subtitles into base before compositing overlays.** Overlays hide them. (Hard Rule 1.)
 - **Single-pass filtergraph when you have overlays.** Double re-encodes. Use per-segment extract → concat.
 - **Linear animation easing.** Looks robotic. Always cubic.

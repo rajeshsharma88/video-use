@@ -31,9 +31,15 @@ pip install -e .
 brew install ffmpeg           # required
 brew install yt-dlp            # optional, for downloading online sources
 
-# 3. Add your ElevenLabs API key
-cp .env.example .env
-$EDITOR .env                   # ELEVENLABS_API_KEY=...
+# 3. Pick a transcription backend — local whisper-cli is free, no key
+brew install whisper-cpp                 # local, offline, default
+curl -L -o ~/whisper-models/ggml-large-v3-turbo.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
+
+# …or use hosted ElevenLabs Scribe instead (needed only for speaker
+# diarization and audio events, which local whisper does not produce):
+# cp .env.example .env
+# $EDITOR .env                           # ELEVENLABS_API_KEY=...
 ```
 
 Then point Claude Code at a folder of raw takes:
@@ -57,7 +63,7 @@ The LLM never watches the video. It **reads** it — through two layers that tog
   <img src="static/timeline-view.svg" alt="timeline_view composite — filmstrip + speaker track + waveform + word labels + silence-gap cut candidates" width="100%">
 </p>
 
-**Layer 1 — Audio transcript (always loaded).** One ElevenLabs Scribe call per source gives word-level timestamps, speaker diarization, and audio events (`(laughter)`, `(applause)`, `(sigh)`). All takes pack into a single ~12KB `takes_packed.md` — the LLM's primary reading view.
+**Layer 1 — Audio transcript (always loaded).** One transcription call per source gives word-level timestamps. The default backend is local `whisper-cli` (free, offline); hosted ElevenLabs Scribe additionally provides speaker diarization and audio events (`(laughter)`, `(applause)`, `(sigh)`). All takes pack into a single ~12KB `takes_packed.md` — the LLM's primary reading view.
 
 ```
 ## C0103  (duration: 43.0s, 8 phrases)
